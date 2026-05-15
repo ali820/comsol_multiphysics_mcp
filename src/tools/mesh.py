@@ -39,18 +39,22 @@ def register_mesh_tools(mcp: FastMCP) -> None:
     
     @mcp.tool()
     def mesh_create(
-        mesh_name: Optional[str] = None,
+        mesh_name: str = "mesh1",
+        geometry_name: Optional[str] = None,
+        mesh_size: int = 5,
         model_name: Optional[str] = None
     ) -> dict:
         """
-        Run a mesh sequence to generate the mesh.
-        
-        This executes the meshing operations defined in the mesh sequence.
-        
+        Create (or re-run) a mesh sequence and generate the mesh.
+
+        Creates the mesh sequence if it doesn't exist and runs the mesher.
+
         Args:
-            mesh_name: Mesh sequence name (default: run all mesh sequences)
+            mesh_name: Mesh sequence name (default: "mesh1")
+            geometry_name: Geometry to mesh (default: first geometry)
+            mesh_size: Mesh element size 1=fine ... 9=coarse (default: 5)
             model_name: Model name (default: current model)
-        
+
         Returns:
             Mesh generation status
         """
@@ -60,13 +64,45 @@ def register_mesh_tools(mcp: FastMCP) -> None:
                 "success": False,
                 "error": f"Model not found: {model_name or 'no current model'}"
             }
-        
+
         try:
-            model.mesh(mesh_name)
+            jm = model.java
+
+            # Find the first component
+            comp = None
+            for c in jm.component():
+                comp = c
+                break
+            if comp is None:
+                return {"success": False, "error": "No component found. Create one first with model_create_component."}
+
+            # Find geometry
+            geoms = list(comp.geom())
+            if not geoms:
+                return {"success": False, "error": "No geometry found. Create geometry first."}
+
+            target_geom = geometry_name or geoms[0].tag()
+
+            # Create or get mesh
+            existing = list(comp.mesh())
+            mesh = None
+            for m in existing:
+                if m.tag() == mesh_name:
+                    mesh = m
+                    break
+
+            if mesh is None:
+                mesh = comp.mesh().create(mesh_name, target_geom)
+
+            mesh.autoMeshSize(mesh_size)
+            mesh.run()
+
             return {
                 "success": True,
                 "mesh": mesh_name,
-                "message": f"Mesh created: {mesh_name or 'all meshes'}",
+                "geometry": target_geom,
+                "size": mesh_size,
+                "message": f"Mesh '{mesh_name}' on geometry '{target_geom}' generated (size={mesh_size}).",
             }
         except Exception as e:
             return {"success": False, "error": f"Failed to create mesh: {str(e)}"}

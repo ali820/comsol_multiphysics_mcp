@@ -52,7 +52,7 @@ class SessionManager:
             except Exception as e:
                 return {"success": False, "error": f"Failed to clear existing session: {e}"}
         try:
-            self._client = mph.Client(cores=cores, version=version)
+            self._client = mph.start(cores=cores, version=version)
             return {
                 "success": True,
                 "version": self._client.version,

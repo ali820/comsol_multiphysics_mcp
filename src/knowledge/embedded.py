@@ -40,10 +40,10 @@ TOPIC_GUIDES = {
     },
     "heat_transfer": {
         "physics": "heat_transfer",
-        "boundary_conditions": ["Temperature", "HeatFlux", "ConvectiveHeatFlux", "Radiation"],
-        "common_expressions": ["T", "ht.qx", "ht.gradT", "ht.Tmax"],
+        "boundary_conditions": ["TemperatureBoundary", "HeatFluxBoundary", "ThermalInsulation"],
+        "common_expressions": ["T", "ht.ntflux", "ht.gradT", "ht.Tmax"],
         "tips": [
-            "ConvectiveHeatFlux requires convection coefficient and ambient temperature",
+            "For convection, use HeatFluxBoundary with q0=h*(Text-T) (Newton's cooling law)",
             "Use Symmetry boundary for adiabatic conditions",
             "Time-dependent studies are common for transient heat transfer",
         ],

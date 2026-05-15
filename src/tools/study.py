@@ -51,6 +51,63 @@ def register_study_tools(mcp: FastMCP) -> None:
             return {"success": False, "error": f"Failed to list studies: {str(e)}"}
     
     @mcp.tool()
+    def study_create(
+        study_name: str = "std1",
+        study_type: str = "Stationary",
+        model_name: Optional[str] = None
+    ) -> dict:
+        """
+        Create a new study in the model.
+
+        Args:
+            study_name: Study name (default: "std1")
+            study_type: Study type - "Stationary" or "TimeDependent" (default: "Stationary")
+            model_name: Model name (default: current model)
+
+        Returns:
+            Created study info
+        """
+        model = session_manager.get_model(model_name)
+        if model is None:
+            return {
+                "success": False,
+                "error": f"Model not found: {model_name or 'no current model'}"
+            }
+
+        try:
+            jm = model.java
+
+            # Check if study already exists via Python API
+            existing = model.studies()
+            if study_name in existing:
+                return {
+                    "success": True,
+                    "study": study_name,
+                    "message": f"Study '{study_name}' already exists.",
+                }
+
+            # Create study via Java API
+            study = jm.study().create(study_name)
+            if study_type.lower() in ("stationary", "stat"):
+                study.create("stat", "Stationary")
+            elif study_type.lower() in ("timedependent", "time", "t"):
+                study.create("time", "TimeDependent")
+            else:
+                study.create("stat", "Stationary")
+
+            # Touch the Python API to sync state
+            _ = model.studies()
+
+            return {
+                "success": True,
+                "study": study_name,
+                "type": study_type,
+                "message": f"Study '{study_name}' ({study_type}) created.",
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to create study: {str(e)}"}
+
+    @mcp.tool()
     def study_solve(
         study_name: Optional[str] = None,
         model_name: Optional[str] = None,
@@ -59,13 +116,15 @@ def register_study_tools(mcp: FastMCP) -> None:
     ) -> dict:
         """
         Solve a study (synchronous by default).
-        
+
+        If no study exists, a Stationary study "std1" is auto-created.
+
         Args:
-            study_name: Study to solve (None for all studies)
+            study_name: Study to solve (default: "std1", auto-created if missing)
             model_name: Model name (default: current model)
             wait: If True, wait for completion; if False, return immediately
             timeout: Maximum wait time in seconds (only used if wait=True)
-        
+
         Returns:
             Solution status, or error message
         """
@@ -75,16 +134,37 @@ def register_study_tools(mcp: FastMCP) -> None:
                 "success": False,
                 "error": f"Model not found: {model_name or 'no current model'}"
             }
-        
+
         if async_solver.is_running:
             return {
                 "success": False,
                 "error": "Another solving operation is in progress. Use study_get_progress to check status."
             }
-        
+
         try:
+            jm = model.java
+            studies = list(jm.study())
+
+            if not studies and study_name is None:
+                study_name = "std1"
+                study = jm.study().create(study_name)
+                study.create("stat", "Stationary")
+            elif not studies:
+                study = jm.study().create(study_name)
+                study.create("stat", "Stationary")
+            elif study_name is None:
+                study_name = studies[0].tag()
+
             if wait:
-                model.solve(study_name)
+                # Use Java API directly for reliable study access
+                target_study = None
+                for s in jm.study():
+                    if s.tag() == study_name:
+                        target_study = s
+                        break
+                if target_study is None:
+                    return {"success": False, "error": f"Study '{study_name}' not found."}
+                target_study.run()
                 return {
                     "success": True,
                     "study": study_name,

@@ -243,11 +243,11 @@ def register_physics_tools(mcp: FastMCP) -> None:
     ) -> dict:
         """
         Add Heat Transfer physics for thermal analysis.
-        
+
         Args:
             domain_selection: Selection name for domains (default: all domains)
             model_name: Model name (default: current model)
-        
+
         Returns:
             Created physics info
         """
@@ -257,23 +257,33 @@ def register_physics_tools(mcp: FastMCP) -> None:
                 "success": False,
                 "error": f"Model not found: {model_name or 'no current model'}"
             }
-        
+
         try:
-            physics_node = model.create("physics", "HeatTransfer")
-            
-            if domain_selection:
-                try:
-                    physics_node.property("selection", domain_selection)
-                except Exception:
-                    pass
-            
+            jm = model.java
+
+            # Find first component and its geometry
+            comp = None
+            for c in jm.component():
+                comp = c
+                break
+            if comp is None:
+                return {"success": False, "error": "No component found."}
+
+            geoms = list(comp.geom())
+            if not geoms:
+                return {"success": False, "error": "No geometry found."}
+            geom_name = geoms[0].tag()
+
+            physics = comp.physics().create('ht', 'HeatTransfer', geom_name)
+            physics.label('Heat Transfer in Solids')
+
             return {
                 "success": True,
                 "physics": {
-                    "name": physics_node.name() if hasattr(physics_node, 'name') else "Heat Transfer",
+                    "name": "Heat Transfer in Solids",
                     "type": "HeatTransfer",
                     "tag": "ht",
-                    "domain_selection": domain_selection,
+                    "geometry": geom_name,
                 }
             }
         except Exception as e:
@@ -346,10 +356,10 @@ def register_physics_tools(mcp: FastMCP) -> None:
         - "BoundaryLoad": Applied force/pressure
         
         Common for Heat Transfer:
-        - "Temperature": Fixed temperature
-        - "HeatFlux": Heat flux boundary
-        - "ConvectiveHeatFlux": Convection cooling
-        - "Symmetry": Symmetry (adiabatic)
+        - "TemperatureBoundary": Fixed temperature
+        - "HeatFluxBoundary": Heat flux boundary
+        - "HeatFluxBoundary" with q0=h*(Text-T): Convection cooling
+        - "ThermalInsulation": Thermal insulation (adiabatic)
         
         Args:
             physics_name: Name of the physics interface
@@ -831,15 +841,13 @@ def register_physics_tools(mcp: FastMCP) -> None:
                 "boundaries": boundaries_info["boundaries"],
                 "boundary_condition_types": {
                     "TemperatureBoundary": "Fixed temperature (heat sink/source)",
-                    "HeatFluxBoundary": "Prescribed heat flux (heat source)",
-                    "ConvectiveHeatFlux": "Convection cooling/heating",
-                    "Symmetry": "Symmetry plane (adiabatic)",
+                    "HeatFluxBoundary": "Prescribed heat flux (heat source or convection with q0=h*(Text-T))",
                     "ThermalInsulation": "Thermal insulation (default)"
                 },
                 "typical_setup": {
                     "heat_source": "Use HeatFluxBoundary with q0 parameter (W/m^2)",
                     "heat_sink": "Use TemperatureBoundary with T0 parameter (K or degC)",
-                    "convection": "Use ConvectiveHeatFlux with h and Text parameters"
+                    "convection": "Use HeatFluxBoundary with q0=h*(Text-T) where h is coefficient, Text is ambient temp"
                 },
                 "example_usage": {
                     "heat_source": "physics_setup_heat_boundaries(physics_name='Heat Transfer in Solids', heat_flux_boundaries=[1, 2], heat_flux_value='1e6[W/m^2]')",
@@ -939,19 +947,20 @@ def register_physics_tools(mcp: FastMCP) -> None:
                     "temperature": temperature_value
                 })
             
-            # Add convection boundaries
+            # Add convection boundaries (using HeatFluxBoundary with Newton's cooling law)
+            # q = h*(Text - T), where T is evaluated at the boundary at runtime
             for i, boundary in enumerate(convection_boundaries):
                 tag = f'conv{i+1}'
-                bc = physics.create(tag, 'ConvectiveHeatFlux')
+                bc = physics.create(tag, 'HeatFluxBoundary')
                 bc.selection().set([int(boundary)])
-                bc.set('h', convection_coeff)
-                bc.set('Text', ambient_temp)
+                bc.set('q0', f'{convection_coeff}*({ambient_temp} - T)')
                 bc.label(f'Convection {i+1} (Boundary {boundary})')
                 results["convection"].append({
                     "tag": tag,
                     "boundary": boundary,
                     "h": convection_coeff,
-                    "T_amb": ambient_temp
+                    "T_amb": ambient_temp,
+                    "expression": f'q0 = {convection_coeff}*({ambient_temp} - T)'
                 })
             
             return {
@@ -989,8 +998,7 @@ def register_physics_tools(mcp: FastMCP) -> None:
         
         Heat Transfer (ht):
         - TemperatureBoundary: Set T0 (temperature)
-        - HeatFluxBoundary: Set q0 (heat flux)
-        - ConvectiveHeatFlux: Set h (coefficient), Text (ambient temp)
+        - HeatFluxBoundary: Set q0 (heat flux or convection expression h*(Text-T))
         
         Laminar Flow (spf):
         - InletBoundary: Set U0 (velocity)

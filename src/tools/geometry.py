@@ -1,6 +1,6 @@
 """Geometry tools for COMSOL MCP Server."""
 
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 from mcp.server.fastmcp import FastMCP
 
 from .session import session_manager
@@ -187,8 +187,8 @@ def register_geometry_tools(mcp: FastMCP) -> None:
     
     @mcp.tool()
     def geometry_add_block(
-        position: Sequence[float] = (0, 0, 0),
-        size: Sequence[float] = (1, 1, 1),
+        position: Sequence = ("0", "0", "0"),
+        size: Sequence = ("1", "1", "1"),
         geometry_name: Optional[str] = None,
         component_name: str = "comp1",
         feature_name: Optional[str] = None,
@@ -220,7 +220,7 @@ def register_geometry_tools(mcp: FastMCP) -> None:
             if error:
                 return {"success": False, "error": error}
             
-            feat_name = feature_name or f"blk{len(geom.feature())+1}"
+            feat_name = feature_name or f"blk{geom.feature().size()+1}"
             block = geom.feature().create(feat_name, "Block")
             
             block.set("pos", [str(p) for p in position])
@@ -240,9 +240,9 @@ def register_geometry_tools(mcp: FastMCP) -> None:
     
     @mcp.tool()
     def geometry_add_cylinder(
-        position: Sequence[float] = (0, 0, 0),
-        radius: float = 0.5,
-        height: float = 1.0,
+        position: Sequence = ("0", "0", "0"),
+        radius: str = "0.5",
+        height: str = "1.0",
         geometry_name: Optional[str] = None,
         component_name: str = "comp1",
         feature_name: Optional[str] = None,
@@ -275,7 +275,7 @@ def register_geometry_tools(mcp: FastMCP) -> None:
             if error:
                 return {"success": False, "error": error}
             
-            feat_name = feature_name or f"cyl{len(geom.feature())+1}"
+            feat_name = feature_name or f"cyl{geom.feature().size()+1}"
             cyl = geom.feature().create(feat_name, "Cylinder")
             
             cyl.set("pos", [str(p) for p in position])
@@ -297,8 +297,8 @@ def register_geometry_tools(mcp: FastMCP) -> None:
     
     @mcp.tool()
     def geometry_add_sphere(
-        position: Sequence[float] = (0, 0, 0),
-        radius: float = 0.5,
+        position: Sequence = ("0", "0", "0"),
+        radius: str = "0.5",
         geometry_name: Optional[str] = None,
         component_name: str = "comp1",
         feature_name: Optional[str] = None,
@@ -330,7 +330,7 @@ def register_geometry_tools(mcp: FastMCP) -> None:
             if error:
                 return {"success": False, "error": error}
             
-            feat_name = feature_name or f"sph{len(geom.feature())+1}"
+            feat_name = feature_name or f"sph{geom.feature().size()+1}"
             sphere = geom.feature().create(feat_name, "Sphere")
             
             sphere.set("pos", [str(p) for p in position])
@@ -350,8 +350,8 @@ def register_geometry_tools(mcp: FastMCP) -> None:
     
     @mcp.tool()
     def geometry_add_rectangle(
-        position: Sequence[float] = (0, 0),
-        size: Sequence[float] = (1, 1),
+        position: Sequence = ("0", "0"),
+        size: Sequence = ("1", "1"),
         geometry_name: Optional[str] = None,
         component_name: str = "comp1",
         feature_name: Optional[str] = None,
@@ -359,15 +359,15 @@ def register_geometry_tools(mcp: FastMCP) -> None:
     ) -> dict:
         """
         Add a rectangle to a 2D geometry or work plane.
-        
+
         Args:
-            position: Base position [x, y] in meters
-            size: Dimensions [width, height] in meters
+            position: Base position [x, y] with units (e.g., ["0", "0"] or ["-0.05[m]", "-0.05[m]"])
+            size: Dimensions [width, height] with units (e.g., ["0.1[m]", "0.1[m]"])
             geometry_name: Geometry sequence name (default: first geometry)
             component_name: Component name (default: 'comp1')
             feature_name: Feature name (auto-generated if None)
             model_name: Model name (default: current model)
-        
+
         Returns:
             Created rectangle info
         """
@@ -383,10 +383,11 @@ def register_geometry_tools(mcp: FastMCP) -> None:
             if error:
                 return {"success": False, "error": error}
             
-            feat_name = feature_name or f"r{len(geom.feature())+1}"
+            feat_name = feature_name or f"r{geom.feature().size()+1}"
             rect = geom.feature().create(feat_name, "Rectangle")
             
             rect.set("pos", [str(p) for p in position])
+            rect.set("size", [str(s) for s in size])
             rect.set("size", [str(s) for s in size])
             
             return {
@@ -534,7 +535,7 @@ def register_geometry_tools(mcp: FastMCP) -> None:
             if error:
                 return {"success": False, "error": error}
             
-            feat_name = feature_name or f"dif{len(geom.feature())+1}"
+            feat_name = feature_name or f"dif{geom.feature().size()+1}"
             diff = geom.feature().create(feat_name, "Difference")
             
             diff.selection("input").set([input_object])
